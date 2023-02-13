@@ -2,25 +2,28 @@
 #define CONCURRENT_QUEUE_HPP
 
 #include "QueueInterface.h"
+#include "SpinLock.hpp"
 
 #include <atomic>
 
 class ConcurrentQueue : public QueueInterface {
 private:
-    size_t size_;
+    std::atomic<size_t> size_;
     struct Node {
-        Node * prev;
-        Node * next;
         BufferPtr buffer;
+        Node * prev;
+        std::mutex m;
+
+        explicit Node(BufferPtr bu) : Node(bu, nullptr) {}
+        explicit Node(BufferPtr bu, Node* p) : buffer(bu), prev(p) {}
     };
-    Node * head_;
-    Node * tail_;
+    Node* head_;
+    Node* tail_;
 
 public:
     ConcurrentQueue() {
         size_ = 0;
-        head_ = nullptr;
-        tail_ = nullptr;
+        head_ = new Node(nullptr);
     }
     ~ConcurrentQueue() {}
     size_t Size() override {
@@ -28,43 +31,13 @@ public:
     }
 
     void Push(BufferPtr buffer) override {
-        Node * n = new Node;
-        n->buffer = buffer;
-        if (head_ == nullptr) {
-            n->prev = nullptr;
-            n->next = nullptr;
-            head_ = n;
-            tail_ = n;
-        } else {
-            n->prev = tail_;
-            n->next = nullptr;
-            tail_->next = n;
-            tail_ = n;
-        }
+        Node* new_node = new Node(buffer);
+        
         ++size_;
     }
 
     BufferPtr Pop() override {
         BufferPtr bu;
-        if (size_ == 0) {
-            // Nothing to pop
-            bu = nullptr;
-        }
-        else if (size_ == 1) {
-            // Head and Tail is same.
-            bu = head_->buffer;
-            delete head_;
-            head_ = tail_ = nullptr;
-            size_ = 0;
-        } else {
-            // Head & Tail is different.
-            Node * tailTemp = tail_;
-            bu = tail_->buffer;
-            tail_ = tail_->prev;
-            tail_->next = nullptr;
-            delete tailTemp;
-            --size_;
-        }
         return bu;
     }
 };
